@@ -714,35 +714,120 @@
       }
     }
     
-    // 文本朗读功能 - 使用Google Translate TTS服务
-    function speakText(text, lang = 'ja') {
+    // 全局变量存储音频元素和用户交互状态
+    let userHasInteracted = false;
+    let audioElements = [];
+    
+    // 文本朗读功能 - 使用有道词典TTS服务
+    function speakText(text, lang = 'ja-JP') {
+      console.log('请求播放语音:', text, '语言:', lang);
+      
+      // 检查用户是否已交互
+      if (!userHasInteracted) {
+        console.log('用户尚未交互，初始化音频系统');
+        initAudioSystem();
+        userHasInteracted = true;
+      }
+      
+      // 停止所有正在播放的音频
+      stopAllAudio();
+      
       try {
         // 创建音频元素
         const audio = new Audio();
+        audioElements.push(audio);
         
-        // 使用Google Translate TTS服务
-        // 注意：这是一个非官方API，可能会随时失效
-        const url = `https://translate.google.com/translate_tts?ie=UTF-8&tl=${lang}&q=${encodeURIComponent(text)}`;
+        // 使用有道词典TTS服务
+        // 格式: http://dict.youdao.com/dictvoice?le=jap&audio=单词
+        let url = '';
+        if (lang === 'ja' || lang === 'ja-JP') {
+          // 日语单词使用有道词典API
+          url = `http://dict.youdao.com/dictvoice?le=jap&audio=${encodeURIComponent(text)}`;
+        } else {
+          // 其他语言使用Google Translate TTS服务作为后备
+          url = `https://translate.google.com/translate_tts?ie=UTF-8&tl=${lang}&q=${encodeURIComponent(text)}`;
+        }
+        
+        console.log('使用TTS服务:', url);
         
         audio.src = url;
+        audio.crossOrigin = 'anonymous';
+        
+        // 监听音频事件
+        audio.addEventListener('ended', () => {
+          console.log('语音播放完成:', text);
+        });
+        
+        audio.addEventListener('error', (error) => {
+          console.error('语音播放失败:', error);
+          // 如果有道词典TTS失败，尝试使用Google Translate TTS作为后备
+          tryGoogleTTS(text, lang);
+        });
+        
+        // 播放音频
         audio.play()
           .then(() => {
-            console.log('语音播放成功:', text);
+            console.log('语音播放开始:', text);
           })
           .catch(error => {
             console.error('语音播放失败:', error);
-            // 如果Google TTS失败，尝试使用Web Speech API作为后备
-            tryWebSpeechAPI(text, lang);
+            // 如果播放失败，尝试使用Google Translate TTS作为后备
+            tryGoogleTTS(text, lang);
           });
       } catch (error) {
         console.error('TTS服务调用失败:', error);
-        // 如果TTS服务调用失败，尝试使用Web Speech API作为后备
+        // 如果TTS服务调用失败，尝试使用Google Translate TTS作为后备
+        tryGoogleTTS(text, lang);
+      }
+    }
+    
+    // 尝试使用Google Translate TTS服务
+    function tryGoogleTTS(text, lang = 'ja-JP') {
+      console.log('尝试使用Google Translate TTS服务:', text);
+      
+      try {
+        // 创建音频元素
+        const audio = new Audio();
+        audioElements.push(audio);
+        
+        // 使用Google Translate TTS服务
+        const url = `https://translate.google.com/translate_tts?ie=UTF-8&tl=${lang}&q=${encodeURIComponent(text)}`;
+        
+        audio.src = url;
+        audio.crossOrigin = 'anonymous';
+        
+        // 监听音频事件
+        audio.addEventListener('ended', () => {
+          console.log('Google Translate TTS播放完成:', text);
+        });
+        
+        audio.addEventListener('error', (error) => {
+          console.error('Google Translate TTS播放失败:', error);
+          // 如果Google TTS也失败，尝试使用Web Speech API作为后备
+          tryWebSpeechAPI(text, lang);
+        });
+        
+        // 播放音频
+        audio.play()
+          .then(() => {
+            console.log('Google Translate TTS播放开始:', text);
+          })
+          .catch(error => {
+            console.error('Google Translate TTS播放失败:', error);
+            // 如果播放失败，尝试使用Web Speech API作为后备
+            tryWebSpeechAPI(text, lang);
+          });
+      } catch (error) {
+        console.error('Google Translate TTS调用失败:', error);
+        // 如果Google TTS调用失败，尝试使用Web Speech API作为后备
         tryWebSpeechAPI(text, lang);
       }
     }
     
     // Web Speech API作为后备方案
     function tryWebSpeechAPI(text, lang = 'ja-JP') {
+      console.log('尝试使用Web Speech API播放语音:', text);
+      
       // 检查浏览器是否支持语音合成
       if ('speechSynthesis' in window) {
         try {
@@ -768,30 +853,87 @@
       }
     }
     
-    // 在用户首次交互时触发音频上下文初始化
-    // 解决某些浏览器要求用户交互后才能使用音频的限制
-    document.addEventListener('click', function initAudioOnFirstClick() {
-      // 创建一个静默的音频上下文，触发音频系统初始化
+    // 初始化音频系统
+    function initAudioSystem() {
       try {
-        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        const oscillator = audioContext.createOscillator();
-        const gainNode = audioContext.createGain();
+        // 创建音频上下文
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (AudioContext) {
+          const audioContext = new AudioContext();
+          
+          // 创建一个静默的音频，触发音频系统初始化
+          const oscillator = audioContext.createOscillator();
+          const gainNode = audioContext.createGain();
+          
+          oscillator.connect(gainNode);
+          gainNode.connect(audioContext.destination);
+          gainNode.gain.value = 0; // 静音
+          
+          oscillator.start();
+          oscillator.stop(audioContext.currentTime + 0.01);
+          
+          console.log('音频系统初始化成功');
+        }
         
-        oscillator.connect(gainNode);
-        gainNode.connect(audioContext.destination);
-        gainNode.gain.value = 0; // 静音
+        // 创建一个静默的音频元素，触发音频系统
+        const silentAudio = new Audio();
+        silentAudio.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAD';
+        silentAudio.play().catch(() => {
+          console.log('静默音频播放失败（预期行为）');
+        });
         
-        oscillator.start();
-        oscillator.stop(audioContext.currentTime + 0.01);
-        
-        console.log('用户首次交互，初始化音频系统');
       } catch (error) {
-        console.error('音频初始化失败:', error);
+        console.error('音频系统初始化失败:', error);
+      }
+    }
+    
+    // 停止所有正在播放的音频
+    function stopAllAudio() {
+      // 停止Web Speech API
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
       }
       
-      // 只执行一次
-      document.removeEventListener('click', initAudioOnFirstClick);
-    }, { once: true });
+      // 停止所有音频元素
+      audioElements.forEach(audio => {
+        try {
+          audio.pause();
+          audio.currentTime = 0;
+        } catch (error) {
+          console.error('停止音频失败:', error);
+        }
+      });
+      
+      // 清理音频元素数组
+      audioElements = [];
+    }
+    
+    // 监听用户交互，初始化音频系统
+    function setupUserInteractionListeners() {
+      // 监听多种用户交互事件
+      const interactionEvents = ['click', 'touchstart', 'keydown', 'mousedown'];
+      
+      interactionEvents.forEach(eventType => {
+        document.addEventListener(eventType, function initOnInteraction() {
+          if (!userHasInteracted) {
+            console.log('用户交互:', eventType);
+            initAudioSystem();
+            userHasInteracted = true;
+            
+            // 移除所有交互监听器
+            interactionEvents.forEach(type => {
+              document.removeEventListener(type, initOnInteraction);
+            });
+          }
+        }, { once: true });
+      });
+    }
+    
+    // 页面加载完成后设置用户交互监听器
+    document.addEventListener('DOMContentLoaded', function() {
+      setupUserInteractionListeners();
+      console.log('页面加载完成，设置用户交互监听器');
+    });
     
     // 切换到上一个页面
     function prevWord() {
