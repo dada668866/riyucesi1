@@ -786,7 +786,9 @@
           currentAudio = audio;
           
           // 使用Google Translate TTS服务
-          const url = `https://translate.google.com/translate_tts?ie=UTF-8&tl=${lang}&q=${encodeURIComponent(text)}&client=tw-ob`;
+          // 重要：Google Translate TTS需要使用'ja'作为日语语言代码，而不是'ja-JP'
+          const ttsLang = lang === 'ja-JP' ? 'ja' : lang;
+          const url = `https://translate.google.com/translate_tts?ie=UTF-8&tl=${ttsLang}&q=${encodeURIComponent(text)}&client=tw-ob`;
           
           console.log('使用Google Translate TTS:', url);
           
