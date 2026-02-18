@@ -741,23 +741,12 @@
           // 短文本（单词）：使用有道词典API
           tryYoudaoAPI(text, lang)
             .catch(error => {
-              console.log('有道词典API失败，尝试使用ResponsiveVoice API');
-              return tryResponsiveVoiceAPI(text, lang);
-            })
-            .catch(error => {
-              console.error('所有TTS服务均失败:', error);
+              console.error('有道词典API失败:', error);
             });
         } else {
-          // 长文本（例句）：使用ResponsiveVoice API
-          console.log('文本较长，使用ResponsiveVoice API');
-          tryResponsiveVoiceAPI(text, lang)
-            .catch(error => {
-              console.log('ResponsiveVoice API失败，尝试使用Google Translate TTS');
-              return tryGoogleTTS(text, lang);
-            })
-            .catch(error => {
-              console.error('所有TTS服务均失败:', error);
-            });
+          // 长文本（例句）：拆分成短句，使用有道词典API逐个播放
+          console.log('文本较长，拆分成短句播放');
+          playLongTextWithYoudao(text, lang);
         }
       } else {
         // PC设备：根据文本长度选择TTS服务
@@ -903,6 +892,49 @@
           reject(error);
         }
       });
+    }
+    
+    // 将长文本拆分成短句，使用有道词典API逐个播放
+    function playLongTextWithYoudao(text, lang = 'ja-JP') {
+      console.log('拆分长文本:', text);
+      
+      // 按照标点符号拆分句子
+      const sentences = text.split(/[。！？、，]/g).filter(s => s.trim() !== '');
+      
+      console.log('拆分后的句子:', sentences);
+      
+      // 如果没有拆分出句子，直接播放整个文本
+      if (sentences.length === 0) {
+        sentences.push(text);
+      }
+      
+      // 逐个播放句子
+      let currentIndex = 0;
+      
+      function playNext() {
+        if (currentIndex < sentences.length) {
+          const sentence = sentences[currentIndex];
+          console.log('播放句子', currentIndex + 1, '/', sentences.length, ':', sentence);
+          
+          tryYoudaoAPI(sentence, lang)
+            .then(() => {
+              currentIndex++;
+              // 播放下一个句子
+              playNext();
+            })
+            .catch(error => {
+              console.error('播放句子失败:', sentence, error);
+              // 即使失败，也继续播放下一个句子
+              currentIndex++;
+              playNext();
+            });
+        } else {
+          console.log('所有句子播放完成');
+        }
+      }
+      
+      // 开始播放第一个句子
+      playNext();
     }
     
     // 尝试使用ResponsiveVoice API（免费的TTS服务）
