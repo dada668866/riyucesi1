@@ -736,15 +736,29 @@
       const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
       
       if (isMobile) {
-        // 移动设备：默认使用有道词典API
-        tryYoudaoAPI(text, lang)
-          .catch(error => {
-            console.log('有道词典API失败，尝试使用Web Speech API');
-            return tryWebSpeechAPI(text, lang);
-          })
-          .catch(error => {
-            console.error('所有TTS服务均失败:', error);
-          });
+        // 移动设备：根据文本长度选择TTS服务
+        if (text.length <= 15) {
+          // 短文本（单词）：使用有道词典API
+          tryYoudaoAPI(text, lang)
+            .catch(error => {
+              console.log('有道词典API失败，尝试使用ResponsiveVoice API');
+              return tryResponsiveVoiceAPI(text, lang);
+            })
+            .catch(error => {
+              console.error('所有TTS服务均失败:', error);
+            });
+        } else {
+          // 长文本（例句）：使用ResponsiveVoice API
+          console.log('文本较长，使用ResponsiveVoice API');
+          tryResponsiveVoiceAPI(text, lang)
+            .catch(error => {
+              console.log('ResponsiveVoice API失败，尝试使用Google Translate TTS');
+              return tryGoogleTTS(text, lang);
+            })
+            .catch(error => {
+              console.error('所有TTS服务均失败:', error);
+            });
+        }
       } else {
         // PC设备：根据文本长度选择TTS服务
         if (text.length <= 20) {
