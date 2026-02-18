@@ -114,6 +114,13 @@
         justify-content: center;
       }
       
+      /* 手机端隐藏例句喇叭图标 */
+      @media (max-width: 768px) {
+        .example-speaker-btn {
+          display: none !important;
+        }
+      }
+      
       /* 设置标题前的彩色竖线 */
       .example-line {
         width: 3px;
@@ -367,7 +374,7 @@
         <div class="mb-6">
           <h3 class="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-3 flex items-center">
             <span class="example-line mr-2"></span>例句
-            <button onclick="speakExample()" class="text-primary hover:text-primary/80 transition-colors btn-bounce ml-2">
+            <button onclick="speakExample()" class="text-primary hover:text-primary/80 transition-colors btn-bounce ml-2 example-speaker-btn">
               <i class="fa fa-volume-up"></i>
             </button>
           </h3>
@@ -744,32 +751,39 @@
               console.error('有道词典API失败:', error);
             });
         } else {
-          // 长文本（例句）：拆分成短句，使用有道词典API逐个播放
-          console.log('文本较长，拆分成短句播放');
-          playLongTextWithYoudao(text, lang);
+          // 长文本（例句）：使用Google Translate TTS
+          console.log('文本较长，使用Google Translate TTS');
+          tryGoogleTTS(text, lang)
+            .catch(error => {
+              console.error('Google Translate TTS失败:', error);
+            });
         }
       } else {
         // PC设备：根据文本长度选择TTS服务
         if (text.length <= 20) {
-          // 短文本（单词）：优先使用有道词典API
-          tryYoudaoAPI(text, lang)
+          // 短文本（单词）：Google Translate TTS → Web Speech API → 有道词典API
+          tryGoogleTTS(text, lang)
             .catch(error => {
-              console.log('有道词典API失败，尝试使用Google Translate TTS');
-              return tryGoogleTTS(text, lang);
+              console.log('Google Translate TTS失败，尝试使用Web Speech API');
+              return tryWebSpeechAPI(text, lang);
             })
+            .catch(error => {
+              console.log('Web Speech API失败，尝试使用有道词典API');
+              return tryYoudaoAPI(text, lang);
+            })
+            .catch(error => {
+              console.error('所有TTS服务均失败:', error);
+            });
+        } else {
+          // 长文本（例句）：Google Translate TTS → Web Speech API
+          console.log('文本较长，使用Google Translate TTS');
+          tryGoogleTTS(text, lang)
             .catch(error => {
               console.log('Google Translate TTS失败，尝试使用Web Speech API');
               return tryWebSpeechAPI(text, lang);
             })
             .catch(error => {
               console.error('所有TTS服务均失败:', error);
-            });
-        } else {
-          // 长文本（例句）：直接使用Web Speech API
-          console.log('文本较长，直接使用Web Speech API');
-          tryWebSpeechAPI(text, lang)
-            .catch(error => {
-              console.error('Web Speech API失败:', error);
             });
         }
       }
@@ -889,108 +903,6 @@
             });
         } catch (error) {
           console.error('有道词典API初始化失败:', error);
-          reject(error);
-        }
-      });
-    }
-    
-    // 将长文本拆分成短句，使用有道词典API逐个播放
-    function playLongTextWithYoudao(text, lang = 'ja-JP') {
-      console.log('拆分长文本:', text);
-      
-      // 按照标点符号拆分句子
-      const sentences = text.split(/[。！？、，]/g).filter(s => s.trim() !== '');
-      
-      console.log('拆分后的句子:', sentences);
-      
-      // 如果没有拆分出句子，直接播放整个文本
-      if (sentences.length === 0) {
-        sentences.push(text);
-      }
-      
-      // 逐个播放句子
-      let currentIndex = 0;
-      
-      function playNext() {
-        if (currentIndex < sentences.length) {
-          const sentence = sentences[currentIndex];
-          console.log('播放句子', currentIndex + 1, '/', sentences.length, ':', sentence);
-          
-          tryYoudaoAPI(sentence, lang)
-            .then(() => {
-              currentIndex++;
-              // 播放下一个句子
-              playNext();
-            })
-            .catch(error => {
-              console.error('播放句子失败:', sentence, error);
-              // 即使失败，也继续播放下一个句子
-              currentIndex++;
-              playNext();
-            });
-        } else {
-          console.log('所有句子播放完成');
-        }
-      }
-      
-      // 开始播放第一个句子
-      playNext();
-    }
-    
-    // 尝试使用ResponsiveVoice API（免费的TTS服务）
-    function tryResponsiveVoiceAPI(text, lang = 'ja-JP') {
-      return new Promise((resolve, reject) => {
-        console.log('尝试使用ResponsiveVoice API播放语音:', text);
-        
-        try {
-          // 创建音频元素
-          const audio = new Audio();
-          currentAudio = audio;
-          
-          // 使用ResponsiveVoice API
-          // 注意：这是一个非官方的API端点，可能会随时变更
-          const url = `https://code.responsivevoice.org/getvoice.php?t=${encodeURIComponent(text)}&tl=${lang}`;
-          
-          console.log('使用ResponsiveVoice API:', url);
-          
-          audio.src = url;
-          
-          // 设置超时，如果5秒内没有开始播放，则认为失败
-          const timeout = setTimeout(() => {
-            console.error('ResponsiveVoice API超时');
-            reject(new Error('ResponsiveVoice API超时'));
-          }, 5000);
-          
-          // 监听音频事件
-          audio.addEventListener('canplaythrough', () => {
-            clearTimeout(timeout);
-            console.log('ResponsiveVoice API音频加载完成');
-          });
-          
-          audio.addEventListener('ended', () => {
-            clearTimeout(timeout);
-            console.log('ResponsiveVoice API播放完成:', text);
-            resolve();
-          });
-          
-          audio.addEventListener('error', (error) => {
-            clearTimeout(timeout);
-            console.error('ResponsiveVoice API播放失败:', error);
-            reject(error);
-          });
-          
-          // 播放音频
-          audio.play()
-            .then(() => {
-              console.log('ResponsiveVoice API播放开始:', text);
-            })
-            .catch(error => {
-              clearTimeout(timeout);
-              console.error('ResponsiveVoice API播放失败:', error);
-              reject(error);
-            });
-        } catch (error) {
-          console.error('ResponsiveVoice API初始化失败:', error);
           reject(error);
         }
       });
