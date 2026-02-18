@@ -736,18 +736,10 @@
       const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
       
       if (isMobile) {
-        // 移动设备：优先使用Google Translate TTS
+        // 移动设备：默认使用Google Translate TTS
         tryGoogleTTS(text, lang)
           .catch(error => {
-            console.log('Google Translate TTS失败，尝试使用有道词典API');
-            return tryYoudaoAPI(text, lang);
-          })
-          .catch(error => {
-            console.log('有道词典API失败，尝试使用ResponsiveVoice API');
-            return tryResponsiveVoiceAPI(text, lang);
-          })
-          .catch(error => {
-            console.log('ResponsiveVoice API失败，尝试使用Web Speech API');
+            console.log('Google Translate TTS失败，尝试使用Web Speech API');
             return tryWebSpeechAPI(text, lang);
           })
           .catch(error => {
