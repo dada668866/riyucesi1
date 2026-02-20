@@ -1174,6 +1174,27 @@
     let rapFontSizeState = 0;
     let currentStoryTab = 'basic';
     
+    function applyRapFontSize() {
+      const applyStyle = () => {
+        const rapStory = document.getElementById('rap-story');
+        const rapParagraph = rapStory?.querySelector('p');
+        if (!rapParagraph) return;
+        
+        if (rapFontSizeState === 0) {
+          rapParagraph.style.fontSize = '';
+        } else if (rapFontSizeState === 1) {
+          rapParagraph.style.fontSize = 'calc(1rem - 2px)';
+        } else if (rapFontSizeState === 2) {
+          rapParagraph.style.fontSize = 'calc(1rem - 4px)';
+        }
+      };
+      
+      applyStyle();
+      setTimeout(applyStyle, 50);
+      setTimeout(applyStyle, 100);
+      setTimeout(applyStyle, 200);
+    }
+    
     function switchStoryTab(tab) {
       const basicStory = document.getElementById('basic-story');
       const rapStory = document.getElementById('rap-story');
@@ -1195,20 +1216,10 @@
       } else {
         if (currentStoryTab === 'rap') {
           rapFontSizeState = (rapFontSizeState + 1) % 4;
-          
-          const rapParagraph = rapStory.querySelector('p');
-          if (rapParagraph) {
-            if (rapFontSizeState === 0) {
-              rapParagraph.style.fontSize = '';
-            } else if (rapFontSizeState === 1) {
-              rapParagraph.style.fontSize = 'calc(1rem - 2px)';
-            } else if (rapFontSizeState === 2) {
-              rapParagraph.style.fontSize = 'calc(1rem - 4px)';
-            } else if (rapFontSizeState === 3) {
-              rapParagraph.style.fontSize = '';
-              rapFontSizeState = 0;
-            }
+          if (rapFontSizeState === 3) {
+            rapFontSizeState = 0;
           }
+          applyRapFontSize();
           return;
         }
         
@@ -1223,19 +1234,7 @@
         basicTab.classList.add('text-gray-600', 'dark:text-gray-300', 'hover:bg-gray-100', 'dark:hover:bg-gray-700');
         
         currentStoryTab = 'rap';
-        
-        const rapParagraph = rapStory.querySelector('p');
-        if (rapParagraph) {
-          if (rapFontSizeState === 0) {
-            rapParagraph.style.fontSize = '';
-          } else if (rapFontSizeState === 1) {
-            rapParagraph.style.fontSize = 'calc(1rem - 2px)';
-          } else if (rapFontSizeState === 2) {
-            rapParagraph.style.fontSize = 'calc(1rem - 4px)';
-          } else {
-            rapParagraph.style.fontSize = '';
-          }
-        }
+        applyRapFontSize();
       }
     }
     
