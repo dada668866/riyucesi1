@@ -1192,19 +1192,21 @@
         rapTab.classList.add('text-gray-600', 'dark:text-gray-300', 'hover:bg-gray-100', 'dark:hover:bg-gray-700');
         
         currentStoryTab = 'basic';
-        rapFontSizeState = 0;
       } else {
         if (currentStoryTab === 'rap') {
-          rapFontSizeState = (rapFontSizeState + 1) % 3;
+          rapFontSizeState = (rapFontSizeState + 1) % 4;
           
           const rapParagraph = rapStory.querySelector('p');
           if (rapParagraph) {
             if (rapFontSizeState === 0) {
               rapParagraph.style.fontSize = '';
             } else if (rapFontSizeState === 1) {
-              rapParagraph.style.fontSize = 'calc(1rem - 4px)';
+              rapParagraph.style.fontSize = 'calc(1rem - 2px)';
             } else if (rapFontSizeState === 2) {
-              rapParagraph.style.fontSize = 'calc(1rem - 6px)';
+              rapParagraph.style.fontSize = 'calc(1rem - 4px)';
+            } else if (rapFontSizeState === 3) {
+              rapParagraph.style.fontSize = '';
+              rapFontSizeState = 0;
             }
           }
           return;
@@ -1221,11 +1223,18 @@
         basicTab.classList.add('text-gray-600', 'dark:text-gray-300', 'hover:bg-gray-100', 'dark:hover:bg-gray-700');
         
         currentStoryTab = 'rap';
-        rapFontSizeState = 0;
         
         const rapParagraph = rapStory.querySelector('p');
         if (rapParagraph) {
-          rapParagraph.style.fontSize = '';
+          if (rapFontSizeState === 0) {
+            rapParagraph.style.fontSize = '';
+          } else if (rapFontSizeState === 1) {
+            rapParagraph.style.fontSize = 'calc(1rem - 2px)';
+          } else if (rapFontSizeState === 2) {
+            rapParagraph.style.fontSize = 'calc(1rem - 4px)';
+          } else {
+            rapParagraph.style.fontSize = '';
+          }
         }
       }
     }
