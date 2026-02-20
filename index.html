@@ -768,14 +768,10 @@
     
     // 检测VPN并选择合适的TTS服务
     async function checkVPNAndSpeak(text, lang) {
-      // PC端：Google TTS（首选）→ 有道词典API → Web Speech API → TextReadTTS
-      console.log('PC端朗读，首选Google TTS');
+      // PC端：有道词典API → Web Speech API → TextReadTTS
+      console.log('PC端朗读，首选有道词典API');
       
-      tryGoogleTTS(text, lang)
-        .catch(error => {
-          console.log('Google TTS失败，尝试有道词典API');
-          return tryYoudaoAPI(text, lang);
-        })
+      tryYoudaoAPI(text, lang)
         .catch(error => {
           console.log('有道词典API失败，尝试Web Speech API');
           return tryWebSpeechAPI(text, lang);
@@ -787,66 +783,6 @@
         .catch(error => {
           console.error('所有TTS服务均失败:', error);
         });
-    }
-    
-    // 尝试使用Google Translate TTS服务
-    function tryGoogleTTS(text, lang = 'ja-JP') {
-      return new Promise((resolve, reject) => {
-        console.log('尝试使用Google Translate TTS服务:', text);
-        
-        try {
-          // 创建音频元素
-          const audio = new Audio();
-          currentAudio = audio;
-          
-          // 使用Google Translate TTS服务
-          // 重要：Google Translate TTS需要使用'ja'作为日语语言代码，而不是'ja-JP'
-          const ttsLang = lang === 'ja-JP' ? 'ja' : lang;
-          const url = `https://translate.google.com/translate_tts?ie=UTF-8&tl=${ttsLang}&q=${encodeURIComponent(text)}&client=tw-ob`;
-          
-          console.log('使用Google Translate TTS:', url);
-          
-          audio.src = url;
-          
-          // 设置超时，如果3秒内没有开始播放，则认为失败
-          const timeout = setTimeout(() => {
-            console.error('Google Translate TTS超时');
-            reject(new Error('Google Translate TTS超时'));
-          }, 3000);
-          
-          // 监听音频事件
-          audio.addEventListener('canplaythrough', () => {
-            clearTimeout(timeout);
-            console.log('Google Translate TTS音频加载完成');
-          });
-          
-          audio.addEventListener('ended', () => {
-            clearTimeout(timeout);
-            console.log('Google Translate TTS播放完成:', text);
-            resolve();
-          });
-          
-          audio.addEventListener('error', (error) => {
-            clearTimeout(timeout);
-            console.error('Google Translate TTS播放失败:', error);
-            reject(error);
-          });
-          
-          // 播放音频
-          audio.play()
-            .then(() => {
-              console.log('Google Translate TTS播放开始:', text);
-            })
-            .catch(error => {
-              clearTimeout(timeout);
-              console.error('Google Translate TTS播放失败:', error);
-              reject(error);
-            });
-        } catch (error) {
-          console.error('Google Translate TTS初始化失败:', error);
-          reject(error);
-        }
-      });
     }
     
     // 尝试使用有道词典API
