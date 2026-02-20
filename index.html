@@ -477,6 +477,12 @@
     
     // 页面加载完成后初始化
     window.addEventListener('DOMContentLoaded', function() {
+      // 初始化谷歌连接检测（仅PC端）
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      if (!isMobile) {
+        initGoogleConnectionCheck();
+      }
+      
       // 初始化页面
       updateWordCard(true);
       setupEventListeners();
@@ -718,10 +724,146 @@
     let userHasInteracted = false;
     let currentAudio = null;
     
-    // 全局变量：缓存VPN检测结果
-    let vpnCheckCache = null;
-    let vpnCheckTime = 0;
-    const VPN_CACHE_DURATION = 30000; // VPN检测结果缓存30秒
+    // 全局变量：谷歌连接状态管理
+    let canConnectGoogle = null; // 能否连接谷歌（null表示未检测）
+    let lastGoogleCheckTime = 0;
+    let googleCheckInterval = null; // 定时检测器
+    const GOOGLE_CHECK_INTERVAL = 60000; // 每60秒检测一次
+    const GOOGLE_CHECK_CACHE_DURATION = 30000; // 检测结果缓存30秒
+    
+    // 初始化谷歌连接检测
+    function initGoogleConnectionCheck() {
+      // 立即执行一次检测
+      checkGoogleConnection();
+      
+      // 启动定时检测
+      googleCheckInterval = setInterval(() => {
+        checkGoogleConnection();
+      }, GOOGLE_CHECK_INTERVAL);
+      
+      console.log('谷歌连接检测已启动，每60秒检测一次');
+    }
+    
+    // 检测能否连接谷歌
+    async function checkGoogleConnection() {
+      const now = Date.now();
+      
+      // 如果缓存有效，直接返回
+      if (canConnectGoogle !== null && (now - lastGoogleCheckTime) < GOOGLE_CHECK_CACHE_DURATION) {
+        console.log('使用缓存的谷歌连接状态:', canConnectGoogle ? '可连接' : '不可连接');
+        return canConnectGoogle;
+      }
+      
+      console.log('检测谷歌连接状态...');
+      
+      try {
+        // 方法1：尝试加载谷歌的小图片
+        const result = await checkGoogleImage();
+        canConnectGoogle = result;
+        lastGoogleCheckTime = now;
+        console.log('谷歌连接检测结果（图片法）:', canConnectGoogle ? '可连接' : '不可连接');
+        return result;
+      } catch (error) {
+        console.log('图片法失败，尝试其他方法');
+      }
+      
+      try {
+        // 方法2：尝试fetch谷歌（可能会被CORS阻止）
+        const result = await checkGoogleFetch();
+        canConnectGoogle = result;
+        lastGoogleCheckTime = now;
+        console.log('谷歌连接检测结果（Fetch法）:', canConnectGoogle ? '可连接' : '不可连接');
+        return result;
+      } catch (error) {
+        console.log('Fetch法失败');
+      }
+      
+      // 方法3：尝试连接Google TTS
+      try {
+        const result = await checkGoogleTTS();
+        canConnectGoogle = result;
+        lastGoogleCheckTime = now;
+        console.log('谷歌连接检测结果（TTS法）:', canConnectGoogle ? '可连接' : '不可连接');
+        return result;
+      } catch (error) {
+        console.log('所有检测方法失败，默认不可连接');
+        canConnectGoogle = false;
+        lastGoogleCheckTime = now;
+        return false;
+      }
+    }
+    
+    // 方法1：通过加载谷歌图片检测
+    function checkGoogleImage() {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        const timeout = setTimeout(() => {
+          img.src = '';
+          reject(new Error('图片加载超时'));
+        }, 3000);
+        
+        img.onload = () => {
+          clearTimeout(timeout);
+          resolve(true);
+        };
+        
+        img.onerror = () => {
+          clearTimeout(timeout);
+          reject(new Error('图片加载失败'));
+        };
+        
+        // 使用谷歌的小图片
+        img.src = 'https://www.google.com/favicon.ico?' + Date.now();
+      });
+    }
+    
+    // 方法2：通过fetch检测
+    function checkGoogleFetch() {
+      return new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error('Fetch超时'));
+        }, 3000);
+        
+        fetch('https://www.google.com/favicon.ico', {
+          method: 'HEAD',
+          mode: 'no-cors',
+          cache: 'no-store'
+        })
+        .then(() => {
+          clearTimeout(timeout);
+          resolve(true);
+        })
+        .catch(error => {
+          clearTimeout(timeout);
+          reject(error);
+        });
+      });
+    }
+    
+    // 方法3：通过Google TTS检测
+    function checkGoogleTTS() {
+      return new Promise((resolve, reject) => {
+        const audio = new Audio();
+        const testUrl = 'https://translate.google.com/translate_tts?ie=UTF-8&tl=ja&q=test&client=tw-ob';
+        
+        const timeout = setTimeout(() => {
+          audio.src = '';
+          reject(new Error('TTS连接超时'));
+        }, 3000);
+        
+        audio.addEventListener('canplaythrough', () => {
+          clearTimeout(timeout);
+          resolve(true);
+        });
+        
+        audio.addEventListener('error', () => {
+          clearTimeout(timeout);
+          reject(new Error('TTS连接失败'));
+        });
+        
+        audio.src = testUrl;
+      });
+    }
     
     // 文本朗读功能 - 使用多种TTS服务
     function speakText(text, lang = 'ja-JP') {
@@ -764,33 +906,21 @@
     
     // 检测VPN并选择合适的TTS服务
     async function checkVPNAndSpeak(text, lang) {
-      const now = Date.now();
-      let hasVPN = false;
+      // 获取谷歌连接状态
+      let hasGoogle = canConnectGoogle;
       
-      // 检查缓存是否有效
-      if (vpnCheckCache !== null && (now - vpnCheckTime) < VPN_CACHE_DURATION) {
-        hasVPN = vpnCheckCache;
-        console.log('使用缓存的VPN检测结果:', hasVPN ? '有VPN' : '无VPN');
-      } else {
-        // 快速检测VPN（通过尝试连接Google TTS）
-        console.log('检测VPN状态...');
-        try {
-          hasVPN = await quickCheckVPN();
-          vpnCheckCache = hasVPN;
-          vpnCheckTime = now;
-          console.log('VPN检测结果:', hasVPN ? '有VPN' : '无VPN');
-        } catch (error) {
-          console.log('VPN检测失败，默认无VPN');
-          hasVPN = false;
-          vpnCheckCache = false;
-          vpnCheckTime = now;
-        }
+      // 如果还没有检测过，立即检测
+      if (hasGoogle === null) {
+        console.log('首次朗读，立即检测谷歌连接状态');
+        hasGoogle = await checkGoogleConnection();
       }
       
-      // 根据VPN状态选择TTS服务
-      if (hasVPN) {
-        // 有VPN：首选Google TTS
-        console.log('有VPN，使用Google TTS');
+      console.log('当前谷歌连接状态:', hasGoogle ? '可连接' : '不可连接');
+      
+      // 根据谷歌连接状态选择TTS服务
+      if (hasGoogle) {
+        // 可连接谷歌：首选Google TTS
+        console.log('可连接谷歌，使用Google TTS');
         tryGoogleTTS(text, lang)
           .catch(error => {
             console.log('Google TTS失败，尝试Web Speech API');
@@ -800,10 +930,10 @@
             console.error('所有TTS服务均失败:', error);
           });
       } else {
-        // 无VPN：根据文本长度选择
+        // 不可连接谷歌：根据文本长度选择
         if (text.length <= 20) {
           // 单词：有道词典API → Web Speech API
-          console.log('无VPN，单词朗读使用有道词典API');
+          console.log('不可连接谷歌，单词朗读使用有道词典API');
           tryYoudaoAPI(text, lang)
             .catch(error => {
               console.log('有道词典API失败，尝试Web Speech API');
@@ -814,39 +944,13 @@
             });
         } else {
           // 例句：Web Speech API
-          console.log('无VPN，例句朗读使用Web Speech API');
+          console.log('不可连接谷歌，例句朗读使用Web Speech API');
           tryWebSpeechAPI(text, lang)
             .catch(error => {
               console.error('Web Speech API失败:', error);
             });
         }
       }
-    }
-    
-    // 快速检测VPN（通过尝试连接Google）
-    function quickCheckVPN() {
-      return new Promise((resolve) => {
-        const audio = new Audio();
-        const testUrl = 'https://translate.google.com/translate_tts?ie=UTF-8&tl=ja&q=test&client=tw-ob';
-        
-        // 设置较短超时（2秒）
-        const timeout = setTimeout(() => {
-          audio.src = '';
-          resolve(false);
-        }, 2000);
-        
-        audio.addEventListener('error', () => {
-          clearTimeout(timeout);
-          resolve(false);
-        });
-        
-        audio.addEventListener('canplaythrough', () => {
-          clearTimeout(timeout);
-          resolve(true);
-        });
-        
-        audio.src = testUrl;
-      });
     }
     
     // 尝试使用Google Translate TTS服务
