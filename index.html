@@ -222,15 +222,24 @@
         </div>
         
         <!-- 涉及单词标题 -->
-        <h2 class="text-xl md:text-2xl font-semibold text-gray-800 dark:text-white mb-4 flex items-center">
-          <span class="memory-line mr-2"></span>涉及单词
-          <button onclick="toggleAllWordMeanings();" class="ml-3 text-secondary/40 hover:text-secondary/60 transition-colors btn-bounce inline-block">
-            <i class="fa fa-retweet" id="toggle-icon"></i>
-          </button>
-        </h2>
+        <div class="flex justify-between items-center mb-4">
+          <div class="flex items-center">
+            <h2 class="text-xl md:text-2xl font-semibold text-gray-800 dark:text-white flex items-center">
+              <span class="memory-line mr-2"></span>涉及单词
+            </h2>
+            <button onclick="toggleAllWordMeanings();" class="ml-3 text-secondary/40 hover:text-secondary/60 transition-colors btn-bounce inline-block">
+              <i class="fa fa-retweet" id="toggle-icon"></i>
+            </button>
+          </div>
+          <!-- Tab选择器 -->
+          <div class="flex border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+            <button onclick="switchWordOrderTab('normal')" class="px-3 py-0.5 text-xs font-medium bg-secondary/10 text-secondary border-r border-gray-200 dark:border-gray-700 active-tab" id="word-order-normal">正序</button>
+            <button onclick="switchWordOrderTab('random')" class="px-3 py-0.5 text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700" id="word-order-random">乱序</button>
+          </div>
+        </div>
         
         <!-- 单词列表 -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="word-list-container">
           <div class="bg-secondary/5 p-3 rounded-lg flex justify-between items-center cursor-pointer transition-colors duration-300" onclick="toggleWordMeaning(this, '人（ひと）⓪', '人')">
             <div class="flex-1 min-w-0">
               <p class="font-medium text-gray-800 dark:text-white word-text">人（ひと）⓪</p>
@@ -759,32 +768,85 @@
     
     // 检测VPN并选择合适的TTS服务
     async function checkVPNAndSpeak(text, lang) {
-      // 注意：Google TTS有跨域限制（CORS），即使能连接谷歌也无法在浏览器中播放
-      // 所以我们使用其他可靠的TTS服务
+      // PC端：Google TTS（首选）→ 有道词典API → Web Speech API → TextReadTTS
+      console.log('PC端朗读，首选Google TTS');
       
-      if (text.length <= 20) {
-        // 单词：有道词典API → Web Speech API
-        console.log('单词朗读使用有道词典API');
-        tryYoudaoAPI(text, lang)
-          .catch(error => {
-            console.log('有道词典API失败，尝试Web Speech API');
-            return tryWebSpeechAPI(text, lang);
-          })
-          .catch(error => {
-            console.error('所有TTS服务均失败:', error);
+      tryGoogleTTS(text, lang)
+        .catch(error => {
+          console.log('Google TTS失败，尝试有道词典API');
+          return tryYoudaoAPI(text, lang);
+        })
+        .catch(error => {
+          console.log('有道词典API失败，尝试Web Speech API');
+          return tryWebSpeechAPI(text, lang);
+        })
+        .catch(error => {
+          console.log('Web Speech API失败，尝试TextReadTTS API');
+          return tryTextReadTTS(text, lang);
+        })
+        .catch(error => {
+          console.error('所有TTS服务均失败:', error);
+        });
+    }
+    
+    // 尝试使用Google Translate TTS服务
+    function tryGoogleTTS(text, lang = 'ja-JP') {
+      return new Promise((resolve, reject) => {
+        console.log('尝试使用Google Translate TTS服务:', text);
+        
+        try {
+          // 创建音频元素
+          const audio = new Audio();
+          currentAudio = audio;
+          
+          // 使用Google Translate TTS服务
+          // 重要：Google Translate TTS需要使用'ja'作为日语语言代码，而不是'ja-JP'
+          const ttsLang = lang === 'ja-JP' ? 'ja' : lang;
+          const url = `https://translate.google.com/translate_tts?ie=UTF-8&tl=${ttsLang}&q=${encodeURIComponent(text)}&client=tw-ob`;
+          
+          console.log('使用Google Translate TTS:', url);
+          
+          audio.src = url;
+          
+          // 设置超时，如果3秒内没有开始播放，则认为失败
+          const timeout = setTimeout(() => {
+            console.error('Google Translate TTS超时');
+            reject(new Error('Google Translate TTS超时'));
+          }, 3000);
+          
+          // 监听音频事件
+          audio.addEventListener('canplaythrough', () => {
+            clearTimeout(timeout);
+            console.log('Google Translate TTS音频加载完成');
           });
-      } else {
-        // 例句：Web Speech API（最可靠）
-        console.log('例句朗读使用Web Speech API');
-        tryWebSpeechAPI(text, lang)
-          .catch(error => {
-            console.log('Web Speech API失败，尝试TextReadTTS API');
-            return tryTextReadTTS(text, lang);
-          })
-          .catch(error => {
-            console.error('所有TTS服务均失败:', error);
+          
+          audio.addEventListener('ended', () => {
+            clearTimeout(timeout);
+            console.log('Google Translate TTS播放完成:', text);
+            resolve();
           });
-      }
+          
+          audio.addEventListener('error', (error) => {
+            clearTimeout(timeout);
+            console.error('Google Translate TTS播放失败:', error);
+            reject(error);
+          });
+          
+          // 播放音频
+          audio.play()
+            .then(() => {
+              console.log('Google Translate TTS播放开始:', text);
+            })
+            .catch(error => {
+              clearTimeout(timeout);
+              console.error('Google Translate TTS播放失败:', error);
+              reject(error);
+            });
+        } catch (error) {
+          console.error('Google Translate TTS初始化失败:', error);
+          reject(error);
+        }
+      });
     }
     
     // 尝试使用有道词典API
@@ -919,7 +981,15 @@
             // 创建新的语音实例
             const utterance = new SpeechSynthesisUtterance(text);
             utterance.lang = lang;
-            utterance.rate = 0.9;
+            
+            // 根据文本长度调整语速
+            // 单词用正常语速，例句用较慢语速以改善发音清晰度
+            if (text.length <= 20) {
+              utterance.rate = 0.85; // 单词：稍慢，清晰
+            } else {
+              utterance.rate = 0.75; // 例句：更慢，确保每个词清晰
+            }
+            
             utterance.pitch = 1.0;
             utterance.volume = 1.0;
             
@@ -936,7 +1006,7 @@
             
             // 播放语音
             window.speechSynthesis.speak(utterance);
-            console.log('使用Web Speech API播放语音');
+            console.log('使用Web Speech API播放语音，语速:', utterance.rate);
           } catch (error) {
             console.error('Web Speech API失败:', error);
             reject(error);
@@ -1191,6 +1261,56 @@
         basicTab.classList.remove('bg-secondary/10', 'text-secondary');
         basicTab.classList.add('text-gray-600', 'dark:text-gray-300', 'hover:bg-gray-100', 'dark:hover:bg-gray-700');
       }
+    }
+    
+    // 存储原始单词列表顺序
+    let originalWordOrder = null;
+    
+    // 切换单词排序方式
+    function switchWordOrderTab(order) {
+      const normalTab = document.getElementById('word-order-normal');
+      const randomTab = document.getElementById('word-order-random');
+      const container = document.getElementById('word-list-container');
+      
+      if (!container) return;
+      
+      // 保存原始顺序（首次调用时）
+      if (originalWordOrder === null) {
+        originalWordOrder = Array.from(container.children);
+      }
+      
+      if (order === 'normal') {
+        // 恢复原始顺序
+        container.innerHTML = '';
+        originalWordOrder.forEach(item => container.appendChild(item.cloneNode(true)));
+        
+        // 更新tab样式
+        normalTab.classList.add('bg-secondary/10', 'text-secondary');
+        normalTab.classList.remove('text-gray-600', 'dark:text-gray-300', 'hover:bg-gray-100', 'dark:hover:bg-gray-700');
+        randomTab.classList.remove('bg-secondary/10', 'text-secondary');
+        randomTab.classList.add('text-gray-600', 'dark:text-gray-300', 'hover:bg-gray-100', 'dark:hover:bg-gray-700');
+      } else {
+        // 随机排序
+        const items = Array.from(container.children);
+        shuffleArray(items);
+        container.innerHTML = '';
+        items.forEach(item => container.appendChild(item));
+        
+        // 更新tab样式
+        randomTab.classList.add('bg-secondary/10', 'text-secondary');
+        randomTab.classList.remove('text-gray-600', 'dark:text-gray-300', 'hover:bg-gray-100', 'dark:hover:bg-gray-700');
+        normalTab.classList.remove('bg-secondary/10', 'text-secondary');
+        normalTab.classList.add('text-gray-600', 'dark:text-gray-300', 'hover:bg-gray-100', 'dark:hover:bg-gray-700');
+      }
+    }
+    
+    // Fisher-Yates 洗牌算法
+    function shuffleArray(array) {
+      for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+      }
+      return array;
     }
     
     // 切换日语单词显示/隐藏
